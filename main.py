@@ -14,6 +14,7 @@ def get_info():
     highest_note = 127
     bpm = 120
     start_delay = 4
+    pixel_search_height = 333
 
     # video_path
     while 1:
@@ -55,7 +56,7 @@ def get_info():
         except ValueError:
             print('Incorrect Value!')
             continue
-        if end_sec < 0 or end_sec < start_sec:
+        if end_sec < 0 or end_sec <= start_sec:
             print('The number cannot be below 0 or below the starting second!')
             continue
         else:
@@ -67,7 +68,7 @@ def get_info():
         except ValueError:
             print('Incorrect Value!')
             continue
-        if not 0 < lowest_note < 128:
+        if not (0 <= lowest_note <= 127):
             print('The number cannot be below 0 or higher than 127!')
             continue
         else:
@@ -79,7 +80,7 @@ def get_info():
         except ValueError:
             print('Incorrect Value!')
             continue
-        if not 0 < highest_note < 128:
+        if not (0 <= highest_note <= 127):
             print('The number cannot be below 0 or higher than 127!')
             continue
         else:
@@ -91,7 +92,7 @@ def get_info():
         except ValueError:
             print('Incorrect Value!')
             continue
-        if not 1 < bpm < 500:
+        if not (1 <= bpm <= 500):
             print('The number is either too high or too low!')
             continue
         else:
@@ -99,19 +100,23 @@ def get_info():
     # start_delay
     while 1:
         start_delay_input = input('How many empty beats should be at the beginning of the MIDI file? (defaults to 4)\n')
+        if start_delay_input == '':
+            start_delay = 4
+            break
         try:
             start_delay = int(start_delay_input)
         except ValueError:
             print('Incorrect Value!')
             continue
-        if start_delay == '':
-            start_delay = 4
-            break
-        elif start_delay < 0:
+        if start_delay < 0:
             print('The number cannot be below 0!')
             continue
         else:
             break
+    # fps
+    video = cv2.VideoCapture(video_path)
+    fps = video.get(cv2.CAP_PROP_FPS)
+    video.release()
 
     return {'video_path': video_path,
             'save_path': save_path,
@@ -121,4 +126,8 @@ def get_info():
             'highest_note': highest_note,
             'bpm': bpm,
             'start_delay': start_delay,
-            'fps': 60}
+            'fps': fps,
+            'pixel_search_height': pixel_search_height}
+
+
+print(get_info())
