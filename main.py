@@ -1,8 +1,9 @@
 from PIL import Image
-from midiutil import MIDIFile
-import threading
+# from midiutil import MIDIFile
+# import threading
 import cv2
 import os
+import shutil
 
 
 def get_info():
@@ -130,4 +131,37 @@ def get_info():
             'pixel_search_height': pixel_search_height}
 
 
-print(get_info())
+def process_video(video_path, width=854, height=480):
+    os.makedirs(temp_folder + 'frames')
+    video = cv2.VideoCapture(video_path)
+    loops = 0
+    saved_frames = 0
+
+    while 1:
+        ret, frame = video.read()
+        if saved_frames % 100 == 0:
+            print(saved_frames)
+        if ret:
+            resized_frame = cv2.resize(frame, (width, height), fx=0, fy=0, interpolation=cv2.INTER_CUBIC)
+            resized_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
+            # cv2.imwrite(temp_folder + 'frames/frame%d.jpg' % saved_frames, resized_frame)
+            process_image(Image.fromarray(resized_frame))
+            saved_frames += 1
+        elif not ret:
+            break
+        loops += 1
+
+    video.release()
+    cv2.destroyAllWindows()
+
+
+def process_image(image):
+    pass
+
+
+if __name__ == '__main__':
+    temp_folder = 'Video2Midi_temp/'
+    if os.path.exists(temp_folder):
+        shutil.rmtree(temp_folder)
+    os.makedirs(temp_folder)
+    process_video('S:/Python/Midi/Video2Midi/Test_Videos/DK Summit (from Mario Kart Wii) - Piano Tutorial.mp4')
