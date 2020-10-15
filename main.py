@@ -131,7 +131,13 @@ def get_info():
             'pixel_search_height': pixel_search_height}
 
 
-def process_video(video_path, width=854, height=480):
+def calculate_pixel_coords():
+    output = []
+    for pixel in range(info['highest_note'] - (info['lowest_note'] - 1)):
+        output.append([0, info['pixel_search_height']])
+
+
+def process_video(video_path):
     os.makedirs(temp_folder + 'frames')
     video = cv2.VideoCapture(video_path)
     loops = 0
@@ -142,10 +148,10 @@ def process_video(video_path, width=854, height=480):
         if saved_frames % 100 == 0:
             print(saved_frames)
         if ret:
-            resized_frame = cv2.resize(frame, (width, height), fx=0, fy=0, interpolation=cv2.INTER_CUBIC)
-            resized_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
-            # cv2.imwrite(temp_folder + 'frames/frame%d.jpg' % saved_frames, resized_frame)
-            process_image(Image.fromarray(resized_frame))
+            resized_frame = cv2.resize(frame, (854, 480), fx=0, fy=0, interpolation=cv2.INTER_CUBIC)
+            # resized_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
+            cv2.imwrite(temp_folder + 'frames/frame%d.jpg' % saved_frames, resized_frame)
+            # get_pressed_keys(Image.fromarray(resized_frame), [])
             saved_frames += 1
         elif not ret:
             break
@@ -155,7 +161,7 @@ def process_video(video_path, width=854, height=480):
     cv2.destroyAllWindows()
 
 
-def process_image(image):
+def get_pressed_keys(image, pixels):
     pass
 
 
@@ -164,4 +170,14 @@ if __name__ == '__main__':
     if os.path.exists(temp_folder):
         shutil.rmtree(temp_folder)
     os.makedirs(temp_folder)
-    process_video('S:/Python/Midi/Video2Midi/Test_Videos/DK Summit (from Mario Kart Wii) - Piano Tutorial.mp4')
+    info = {'video_path': 'S:/Python/Midi/Video2Midi/Test_Videos/DK Summit (from Mario Kart Wii) - Piano Tutorial.mp4',
+            'save_path': 'test.mid',
+            'start_sec': 2,
+            'end_sec': 120,
+            'lowest_note': 9,
+            'highest_note': 96,
+            'bpm': 180,
+            'start_delay': 4,
+            'fps': 60,
+            'pixel_search_height': 333}
+    process_video(info['video_path'])
