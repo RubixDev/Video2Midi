@@ -11,8 +11,8 @@ def get_info():
     save_path = ''
     start_sec = 0
     end_sec = 10
-    lowest_note = 0
-    highest_note = 127
+    lowest_key = 0
+    total_keys = 127
     bpm = 120
     start_delay = 4
     pixel_search_height = 333
@@ -62,27 +62,27 @@ def get_info():
             continue
         else:
             break
-    # lowest_note
+    # lowest_key
     while 1:
         try:
-            lowest_note = int(input('What is the lowest note on the displayed keyboard? (0 - 127; C4 = 48)\n'))
+            lowest_key = int(input('What is the lowest note on the displayed keyboard? (0 - 127; C4 = 48)\n'))
         except ValueError:
             print('Incorrect Value!')
             continue
-        if not (0 <= lowest_note <= 127):
+        if not (0 <= lowest_key <= 127):
             print('The number cannot be below 0 or higher than 127!')
             continue
         else:
             break
-    # highest_note
+    # total_keys
     while 1:
         try:
-            highest_note = int(input('What is the highest note on the displayed keyboard? (0 - 127; C4 = 48)\n'))
+            total_keys = int(input('How many Keys are on the displayed keyboard?\n'))
         except ValueError:
             print('Incorrect Value!')
             continue
-        if not (0 <= highest_note <= 127):
-            print('The number cannot be below 0 or higher than 127!')
+        if total_keys + lowest_key > 127 or total_keys < 13:
+            print('The number is either too high or too low!')
             continue
         else:
             break
@@ -114,31 +114,67 @@ def get_info():
             continue
         else:
             break
-    # fps
+    # fps and video_width
     video = cv2.VideoCapture(video_path)
     fps = video.get(cv2.CAP_PROP_FPS)
+    video_width = video.get(cv2.CAP_PROP_FRAME_WIDTH)
     video.release()
 
     return {'video_path': video_path,
             'save_path': save_path,
             'start_sec': start_sec,
             'end_sec': end_sec,
-            'lowest_note': lowest_note,
-            'highest_note': highest_note,
+            'lowest_key': lowest_key,
+            'total_keys': total_keys,
             'bpm': bpm,
             'start_delay': start_delay,
             'fps': fps,
+            'video_width': video_width,
             'pixel_search_height': pixel_search_height}
 
 
 def calculate_pixel_coords():
     output = []
-    for pixel in range(info['highest_note'] - (info['lowest_note'] - 1)):
-        output.append([0, info['pixel_search_height']])
+    lowest_key = info['lowest_key']
+
+    # Count total white keys
+    keys = list('WBWBWWBWBWBW')
+    total_white_keys = 0
+    for key in range(info['total_keys']):
+        total_white_keys += 1 if keys[(key + lowest_key) % len(keys)] == 'W' else 0
+
+    # Calculate average pixel width of white keys
+    white_key_width = info['video_width'] / total_white_keys
+
+    # Get x coordinate for each key
+    counted_white_keys = 0
+
+    for key in range(info['total_keys']):
+        current_key = (key + lowest_key) % len(keys)
+
+        white_offset = 0.5
+        black_offset = 0
+        if keys[current_key] == 'W':
+            if keys[current_key - 1] == 'B' and keys[(current_key + 1) % len(keys)] == 'W':
+                white_offset = 0.75
+            elif keys[current_key - 1] == 'W' and keys[(current_key + 1) % len(keys)] == 'B':
+                white_offset = 0.25
+        elif keys[current_key] == 'B':
+            if keys[current_key - 2] == 'B' and keys[(current_key + 2) % len(keys)] == 'W':
+                black_offset = 0.1
+            elif keys[current_key - 2] == 'W' and keys[(current_key + 2) % len(keys)] == 'B':
+                black_offset = -0.1
+
+        if keys[current_key] == 'W':
+            output.append(round(white_key_width * (counted_white_keys + white_offset)))
+            counted_white_keys += 1
+        elif keys[current_key] == 'B':
+            output.append(round(white_key_width * (counted_white_keys + black_offset)))
+
+    return output
 
 
 def process_video(video_path):
-    os.makedirs(temp_folder + 'frames')
     video = cv2.VideoCapture(video_path)
     loops = 0
     saved_frames = 0
@@ -148,10 +184,8 @@ def process_video(video_path):
         if saved_frames % 100 == 0:
             print(saved_frames)
         if ret:
-            resized_frame = cv2.resize(frame, (854, 480), fx=0, fy=0, interpolation=cv2.INTER_CUBIC)
-            # resized_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
-            cv2.imwrite(temp_folder + 'frames/frame%d.jpg' % saved_frames, resized_frame)
-            # get_pressed_keys(Image.fromarray(resized_frame), [])
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            get_pressed_keys(Image.fromarray(frame), [])
             saved_frames += 1
         elif not ret:
             break
@@ -174,10 +208,12 @@ if __name__ == '__main__':
             'save_path': 'test.mid',
             'start_sec': 2,
             'end_sec': 120,
-            'lowest_note': 9,
-            'highest_note': 96,
+            'lowest_key': 9,
+            'total_keys': 88,
             'bpm': 180,
             'start_delay': 4,
             'fps': 60,
+            'video_width': 1920,
             'pixel_search_height': 333}
-    process_video(info['video_path'])
+    # process_video(info['video_path'])
+    print(calculate_pixel_coords())
