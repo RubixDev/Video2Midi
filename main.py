@@ -207,7 +207,28 @@ def keys_visible(image, pixels, key_colors):
         if key_color == 'B':
             continue
         results.append(gray_color('white', image.getpixel((pixels[pixel], pixel_y))))
-    return results.count(True) >= len(results) * 2/3
+    return results.count(True) > len(results) * 2/3
+
+
+def convert_note_list(note_list):
+    output = []
+    not_new = []
+    note_list.append([])
+    for frame, pressed_keys in enumerate(note_list):
+        output.append([])
+        for count, key in enumerate(not_new):
+            if key not in pressed_keys:
+                del not_new[count]
+        for key in pressed_keys:
+            if key in not_new:
+                continue
+            else:
+                not_new.append(key)
+                duration = 1
+                while key in note_list[frame + duration]:
+                    duration += 1
+                output[frame].append([key, duration])
+    return output
 
 
 def process_video():
@@ -230,13 +251,10 @@ def process_video():
 
             if not keys_visible(pil_frame, pixels, key_colors) and not midi_started:
                 saved_frames += 1
-                print('keys not visible, midi not started')
                 continue
             elif not keys_visible(pil_frame, pixels, key_colors) and midi_started:
-                print('keys not visible, midi started')
                 break
             elif keys_visible(pil_frame, pixels, key_colors) and not midi_started:
-                print('keys visible, midi not started')
                 midi_started = True
 
             pressed_keys.append(get_pressed_keys(pil_frame, pixels, pixel_y))
@@ -252,6 +270,13 @@ def process_video():
     with open('pressed_keys.txt', 'w') as file:
         pressed_keys_text = ''
         for line in pressed_keys:
+            pressed_keys_text += str(line) + '\n'
+        file.write(pressed_keys_text)
+
+    print('Writing 2nd file...')
+    with open('pressed_keys_converted.txt', 'w') as file:
+        pressed_keys_text = ''
+        for line in convert_note_list(pressed_keys):
             pressed_keys_text += str(line) + '\n'
         file.write(pressed_keys_text)
 
