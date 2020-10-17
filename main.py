@@ -15,7 +15,6 @@ def get_info():
     total_keys = 127
     bpm = 120
     start_delay = 4
-    pixel_search_height = 333
 
     # video_path
     while 1:
@@ -114,11 +113,6 @@ def get_info():
             continue
         else:
             break
-    # fps and video_width
-    video = cv2.VideoCapture(video_path)
-    fps = video.get(cv2.CAP_PROP_FPS)
-    video_width = video.get(cv2.CAP_PROP_FRAME_WIDTH)
-    video.release()
 
     return {'video_path': video_path,
             'save_path': save_path,
@@ -127,14 +121,12 @@ def get_info():
             'lowest_key': lowest_key,
             'total_keys': total_keys,
             'bpm': bpm,
-            'start_delay': start_delay,
-            'fps': fps,
-            'video_width': video_width,
-            'pixel_search_height': pixel_search_height}
+            'start_delay': start_delay}
 
 
-def calculate_pixel_coords():
-    output = []
+def calculate_pixel_coords(video_width):
+    coords = []
+    key_colors = []
     lowest_key = info['lowest_key']
 
     # Count total white keys
@@ -144,7 +136,7 @@ def calculate_pixel_coords():
         total_white_keys += 1 if keys[(key + lowest_key) % len(keys)] == 'W' else 0
 
     # Calculate average pixel width of white keys
-    white_key_width = info['video_width'] / total_white_keys
+    white_key_width = video_width / total_white_keys
 
     # Get x coordinate for each key
     counted_white_keys = 0
@@ -166,26 +158,88 @@ def calculate_pixel_coords():
                 black_offset = -0.1
 
         if keys[current_key] == 'W':
-            output.append(round(white_key_width * (counted_white_keys + white_offset)))
+            coords.append(round(white_key_width * (counted_white_keys + white_offset)))
+            key_colors.append('W')
             counted_white_keys += 1
         elif keys[current_key] == 'B':
-            output.append(round(white_key_width * (counted_white_keys + black_offset)))
+            coords.append(round(white_key_width * (counted_white_keys + black_offset)))
+            key_colors.append('B')
+
+    return [coords, key_colors]
+
+
+def colors_similar(color1, color2, threshold=15):
+    # Calculate differences
+    differences = [color1[i] - color2[i] for i in range(3)]
+    differences = [int((i ** 2) ** 0.5) for i in differences]  # Make everything positive
+
+    # Test if similar
+    return [i < threshold for i in differences] == [True, True, True]
+
+
+def gray_color(mode, color, threshold=30):
+    test1 = [i > 150 for i in color] if mode == 'white' else [i < 105 for i in color]
+    test2 = max(color) - min(color) < threshold
+    return [test1, test2] == [[True, True, True], True]
+
+
+def get_pressed_keys(image, pixels, pixel_y):
+    output = []
+
+    for key, coord in enumerate(pixels):
+        new_color = image.getpixel((coord, pixel_y))
+        if colors_similar([0, 0, 0], new_color, 50) or gray_color('white', new_color):
+            continue
+        else:
+            output.append(key)
+            for saved_color in saved_colors:
+                if not colors_similar(new_color, saved_color):
+                    saved_colors.append(new_color)
 
     return output
 
 
-def process_video(video_path):
+def keys_visible(image, pixels, key_colors):
+    pixel_y = round(image.height * 0.95)
+    results = []
+    for pixel in range(len(pixels)):
+        key_color = key_colors[pixel]
+        if key_color == 'B':
+            continue
+        results.append(gray_color('white', image.getpixel((pixels[pixel], pixel_y))))
+    return results.count(True) >= len(results) * 2/3
+
+
+def process_video():
+    video_path = info['video_path']
     video = cv2.VideoCapture(video_path)
     loops = 0
     saved_frames = 0
+    pixels, key_colors = calculate_pixel_coords(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    pixel_y = round(video.get(cv2.CAP_PROP_FRAME_HEIGHT) * 20 / 27)
+    pressed_keys = []
+    midi_started = False
 
     while 1:
         ret, frame = video.read()
-        if saved_frames % 100 == 0:
+        if saved_frames % 500 == 0:
             print(saved_frames)
         if ret:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            get_pressed_keys(Image.fromarray(frame), [])
+            pil_frame = Image.fromarray(frame)
+
+            if not keys_visible(pil_frame, pixels, key_colors) and not midi_started:
+                saved_frames += 1
+                print('keys not visible, midi not started')
+                continue
+            elif not keys_visible(pil_frame, pixels, key_colors) and midi_started:
+                print('keys not visible, midi started')
+                break
+            elif keys_visible(pil_frame, pixels, key_colors) and not midi_started:
+                print('keys visible, midi not started')
+                midi_started = True
+
+            pressed_keys.append(get_pressed_keys(pil_frame, pixels, pixel_y))
             saved_frames += 1
         elif not ret:
             break
@@ -194,9 +248,12 @@ def process_video(video_path):
     video.release()
     cv2.destroyAllWindows()
 
-
-def get_pressed_keys(image, pixels):
-    pass
+    print('Writing file...')
+    with open('pressed_keys.txt', 'w') as file:
+        pressed_keys_text = ''
+        for line in pressed_keys:
+            pressed_keys_text += str(line) + '\n'
+        file.write(pressed_keys_text)
 
 
 if __name__ == '__main__':
@@ -204,16 +261,15 @@ if __name__ == '__main__':
     if os.path.exists(temp_folder):
         shutil.rmtree(temp_folder)
     os.makedirs(temp_folder)
-    info = {'video_path': 'S:/Python/Midi/Video2Midi/Test_Videos/DK Summit (from Mario Kart Wii) - Piano Tutorial.mp4',
+
+    saved_colors = []
+    info = {'video_path': 'S:/Python/Midi/Video2Midi/Test_Videos/'
+                          'DK Summit (from Mario Kart Wii) - Piano Tutorial_480p.mp4',
             'save_path': 'test.mid',
             'start_sec': 2,
             'end_sec': 120,
             'lowest_key': 9,
             'total_keys': 88,
             'bpm': 180,
-            'start_delay': 4,
-            'fps': 60,
-            'video_width': 1920,
-            'pixel_search_height': 333}
-    # process_video(info['video_path'])
-    print(calculate_pixel_coords())
+            'start_delay': 4}
+    process_video()
