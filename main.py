@@ -279,10 +279,10 @@ def process_video():
             pressed_keys.append(get_pressed_keys(frame, pixels, pixel_y))
             saved_frames += 1
         elif not ret:
-            print('Scanned through %d frames' % saved_frames)
             break
         loops += 1
 
+    print('Scanned through %d frames' % saved_frames)
     write_midi(convert_note_list(pressed_keys), video.get(cv2.CAP_PROP_FPS))
 
     video.release()
