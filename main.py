@@ -10,6 +10,7 @@ def get_info():
     total_keys = 127
     bpm = 120
     search_height = 0.74
+    black_mode = False
 
     # video_path
     while 1:
@@ -97,13 +98,26 @@ def get_info():
             continue
         else:
             break
+    # black_mode
+    while 1:
+        black_mode_input = input('Is your video black MIDI? (y/N)\n')
+        if black_mode_input == '' or black_mode_input.upper() == 'N':
+            black_mode = False
+            break
+        elif black_mode_input.upper() == 'Y':
+            black_mode = True
+            break
+        else:
+            print('Incorrect Input!')
+            continue
 
     return {'video_path': video_path,
             'save_path': save_path,
             'lowest_key': lowest_key,
             'total_keys': total_keys,
             'bpm': bpm,
-            'search_height': search_height}
+            'search_height': search_height,
+            'black_mode': black_mode}
 
 
 def frames_to_beats(frames, fps, bpm):
@@ -171,17 +185,12 @@ def calculate_pixel_coords(video_width):
 
 
 def colors_similar(color1, color2, threshold=15):
-    # Calculate differences
-    differences = [color1[i] - color2[i] for i in range(3)]
-    differences = [int((i ** 2) ** 0.5) for i in differences]  # Make everything positive
-
-    # Test if similar
-    return [i < threshold for i in differences] == [True, True, True]
+    return [i < threshold for i in [abs(int(color1[i]) - int(color2[i])) for i in range(3)]] == [True, True, True]
 
 
-def gray_color(mode, color, threshold=50):
-    test1 = [i > 150 for i in color] if mode == 'white' else [i < 105 for i in color]
-    test2 = max(color) - min(color) < threshold
+def gray_color(mode, color, variation=50, threshold=105):
+    test1 = [i > 255 - threshold for i in color] if mode == 'white' else [i < threshold for i in color]
+    test2 = max(color) - min(color) < variation
     return [test1, test2] == [[True, True, True], True]
 
 
@@ -193,19 +202,29 @@ def get_pressed_keys(image, pixels, pixel_y):
         if gray_color('black', new_color) or gray_color('white', new_color):
             continue
         else:
+            if True not in [colors_similar(new_color, saved_color) for saved_color in saved_colors]:
+                saved_colors.append(new_color)
             output.append(key)
 
     return output
 
 
 def keys_visible(image, pixels, key_colors, video_height):
+    black_mode = info['black_mode']
     pixel_y = round(video_height * 0.95)
     results = []
     for pixel, pixel_x in enumerate(pixels):
         key_color = key_colors[pixel]
         if key_color == 'B':
             continue
-        results.append(gray_color('white', get_pixel(image, pixel_x, pixel_y)))
+        pixel_color = get_pixel(image, pixel_x, pixel_y)
+        if not black_mode:
+            if True in [colors_similar(saved_color, pixel_color) for saved_color in saved_colors]:
+                results.append(True)
+            else:
+                results.append(gray_color('white', pixel_color))
+        else:
+            results.append(not gray_color('black', pixel_color))
     return results.count(True) > len(results) * 2/3
 
 
@@ -231,13 +250,10 @@ def convert_note_list(note_list):
 
 
 def write_midi(note_list, fps):
-    # Create midi object
-    midi = MIDIFile(1, file_format=1)
+    midi = MIDIFile(1, file_format=1)  # Create midi object
 
-    # Add Tempo
-    midi.addTempo(0, 0, info['bpm'])
-    # Add instrument
-    midi.addProgramChange(0, 0, 0, 0)  # Piano
+    midi.addTempo(0, 0, info['bpm'])  # Add Tempo
+    midi.addProgramChange(0, 0, 0, 0)  # Add instrument: Piano
 
     # Add notes
     for frame in range(len(note_list)):
@@ -268,12 +284,13 @@ def process_video():
         if ret:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            if not keys_visible(frame, pixels, key_colors, video_height) and not midi_started:
+            keyboard_visible = keys_visible(frame, pixels, key_colors, video_height)
+            if not keyboard_visible and not midi_started:
                 saved_frames += 1
                 continue
-            elif not keys_visible(frame, pixels, key_colors, video_height) and midi_started:
+            elif not keyboard_visible and midi_started:
                 break
-            elif keys_visible(frame, pixels, key_colors, video_height) and not midi_started:
+            elif keyboard_visible and not midi_started:
                 midi_started = True
 
             pressed_keys.append(get_pressed_keys(frame, pixels, pixel_y))
@@ -290,5 +307,7 @@ def process_video():
 
 
 if __name__ == '__main__':
+    saved_colors = []
     info = get_info()
     process_video()
+    print(saved_colors)
