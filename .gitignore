@@ -129,3 +129,4 @@ dmypy.json
 *.mid
 *.jpg
 *.png
+list2img.py
