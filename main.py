@@ -9,8 +9,9 @@ def get_info():
     lowest_key = 0
     total_keys = 127
     bpm = 120
-    search_height = 0.74
+    search_height = 0.82
     black_mode = False
+    old_style = True
 
     # video_path
     while 1:
@@ -84,9 +85,9 @@ def get_info():
             break
     # search_height
     while 1:
-        search_height_input = input('What height should be scanned on? (0 - 1 in %; defaults to 0.85)\n')
+        search_height_input = input('What height should be scanned on? (0 - 1 in %; defaults to 0.84)\n')
         if search_height_input == '':
-            search_height = 0.85
+            search_height = 0.84
             break
         try:
             search_height = float(search_height_input)
@@ -110,6 +111,18 @@ def get_info():
         else:
             print('Incorrect Input!')
             continue
+    # old_style
+    while 1:
+        old_style_input = input('Is your video in the old SMB style? (Y/n)\n')
+        if old_style_input == '' or old_style_input.upper() == 'N':
+            old_style = False
+            break
+        elif old_style_input.upper() == 'Y':
+            old_style = True
+            break
+        else:
+            print('Incorrect Input!')
+            continue
 
     return {'video_path': video_path,
             'save_path': save_path,
@@ -117,7 +130,8 @@ def get_info():
             'total_keys': total_keys,
             'bpm': bpm,
             'search_height': search_height,
-            'black_mode': black_mode}
+            'black_mode': black_mode,
+            'old_style': old_style}
 
 
 def frames_to_beats(frames, fps, bpm):
@@ -145,6 +159,8 @@ def calculate_pixel_coords(video_width):
     # Get x coordinate for each key
     counted_white_keys = 0
 
+    distortion = -1
+
     for key in range(info['total_keys']):
         current_key = (key + lowest_key) % len(keys)
 
@@ -160,9 +176,9 @@ def calculate_pixel_coords(video_width):
                 white_offset = 1/4
             elif adjacent_key(True) == 'B' and adjacent_key(False) == 'B':
                 if adjacent_key(True) == 'B' and adjacent_key(False, 3) == 'B':
-                    white_offset = 1/3
+                    white_offset = 2/5
                 elif adjacent_key(True, 3) == 'B' and adjacent_key(False) == 'B':
-                    white_offset = 2/3
+                    white_offset = 3/5
         elif keys[current_key] == 'B':
             if adjacent_key(True, 2) == 'B' and adjacent_key(False, 2) == 'W':
                 black_offset = 1/10
@@ -170,16 +186,22 @@ def calculate_pixel_coords(video_width):
                 black_offset = -1/10
 
         if keys[current_key] == 'W':
-            coord = round(white_key_width * (counted_white_keys + white_offset))
+            coord = round(white_key_width * (counted_white_keys + white_offset)
+                          + ((distortion * white_key_width/5) if not info['old_style'] else 0))
             coord = video_width if coord > video_width else coord
             coords.append(coord)
+
             key_colors.append('W')
             counted_white_keys += 1
         elif keys[current_key] == 'B':
-            coord = round(white_key_width * (counted_white_keys + black_offset))
+            coord = round(white_key_width * (counted_white_keys + black_offset)
+                          + ((distortion * white_key_width/2.25) if not info['old_style'] else 0))
             coord = video_width if coord > video_width else coord
             coords.append(coord)
+
             key_colors.append('B')
+
+        distortion += 2 / info['total_keys']
 
     return [coords, key_colors]
 
