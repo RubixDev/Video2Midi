@@ -84,9 +84,9 @@ def get_info():
             break
     # search_height
     while 1:
-        search_height_input = input('What height should be scanned on? (0 - 1 in %; defaults to 0.74)\n')
+        search_height_input = input('What height should be scanned on? (0 - 1 in %; defaults to 0.85)\n')
         if search_height_input == '':
-            search_height = 0.74
+            search_height = 0.85
             break
         try:
             search_height = float(search_height_input)
@@ -273,7 +273,8 @@ def process_video():
     loops = 0
     saved_frames = 0
     pixels, key_colors = calculate_pixel_coords(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    pixel_y = round(video_height * 23/27)
+    print(pixels)
+    pixel_y = round(video_height * info['search_height'])
     pressed_keys = []
     midi_started = False
 
@@ -310,4 +311,3 @@ if __name__ == '__main__':
     saved_colors = []
     info = get_info()
     process_video()
-    print(saved_colors)
