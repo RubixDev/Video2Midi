@@ -206,8 +206,9 @@ def calculate_pixel_coords(video_width):
     return [coords, key_colors]
 
 
-def colors_similar(color1, color2, threshold=15):
-    return [i < threshold for i in [abs(int(color1[i]) - int(color2[i])) for i in range(3)]] == [True, True, True]
+def colors_similar(color1, color2, threshold=20):
+    return [k > j for j, k in enumerate([len([i for i in [abs(int(color1[d]) - int(color2[d])) for d in range(3)]
+                                              if i < (threshold * n)]) for n in [1, 3.5, 5]])] == [True, True, True]
 
 
 def gray_color(mode, color, variation=50, threshold=105):
@@ -238,8 +239,7 @@ def keys_visible(image, pixels, key_colors, video_height):
     pixel_y = round(video_height * 0.95)
     results = []
     for pixel, pixel_x in enumerate(pixels):
-        key_color = key_colors[pixel]
-        if key_color == 'B':
+        if key_colors[pixel] == 'B':
             continue
         pixel_color = get_pixel(image, pixel_x, pixel_y)
         if not black_mode:
