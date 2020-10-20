@@ -134,8 +134,8 @@ def get_info():
             'old_style': old_style}
 
 
-def frames_to_beats(frames, fps, bpm):
-    return (frames / fps) * (bpm / 60)
+def frames_to_beats(frames, fps):
+    return (frames / fps) * (info['bpm'] / 60)
 
 
 def get_pixel(image, x, y):
@@ -208,7 +208,7 @@ def calculate_pixel_coords(video_width):
 
 def colors_similar(color1, color2, threshold=20):
     return [k > j for j, k in enumerate([len([i for i in [abs(int(color1[d]) - int(color2[d])) for d in range(3)]
-                                              if i < (threshold * n)]) for n in [1, 3.5, 5]])] == [True, True, True]
+                                              if i < (threshold * n)]) for n in [1, 2.5, 4]])] == [True, True, True]
 
 
 def gray_color(mode, color, variation=50, threshold=105):
@@ -218,18 +218,24 @@ def gray_color(mode, color, variation=50, threshold=105):
     return [test1, test2] == [[True, True, True], True]
 
 
-def get_pressed_keys(image, pixels, pixel_y):
+def get_pressed_keys(image, pixels, pixel_y, key_colors):
     output = []
 
     for key, coord in enumerate(pixels):
         new_color = get_pixel(image, coord, pixel_y)
-        if gray_color('black', new_color) or gray_color('white', new_color) or\
-                (not info['old_style'] and gray_color('gray', new_color)):
+        if gray_color('black', new_color) or gray_color('white', new_color) or gray_color('gray', new_color):
             continue
         else:
-            if True not in [colors_similar(new_color, saved_color) for saved_color in saved_colors]:
+            if True not in [colors_similar(new_color, saved_color, (28 if key_colors[key] == 'B' else 20))
+                            for saved_color in saved_colors]:
                 saved_colors.append(new_color)
-            output.append(key)
+                output.append([key, len(saved_colors) - 1])
+            else:
+                track = 0
+                for track, color in enumerate(saved_colors):
+                    if colors_similar(color, new_color, 45) or track == 15:
+                        break
+                output.append([key, track])
 
     return output
 
@@ -256,25 +262,28 @@ def convert_note_list(note_list):
     output = []
     not_new = []
     note_list.append([])
-    for frame, pressed_keys in enumerate(note_list):
+    for frame, pressed_keys_lists in enumerate(note_list):
         output.append([])
+        pressed_keys = [i[0] for i in pressed_keys_lists]
+
         for count, key in enumerate(not_new):
             if key not in pressed_keys:
                 del not_new[count]
-        for key in pressed_keys:
-            if key in not_new:
+
+        for key in pressed_keys_lists:
+            if key[0] in not_new:
                 continue
             else:
-                not_new.append(key)
+                not_new.append(key[0])
                 duration = 1
-                while key in note_list[frame + duration]:
+                while key[0] in note_list[frame + duration]:
                     duration += 1
-                output[frame].append([key, duration])
+                output[frame].append([key[0], duration, key[1]])
     return output[1:]
 
 
 def write_midi(note_list, fps):
-    midi = MIDIFile(1, file_format=1)  # Create midi object
+    midi = MIDIFile(len(saved_colors))  # Create midi object
 
     midi.addTempo(0, 0, info['bpm'])  # Add Tempo
     midi.addProgramChange(0, 0, 0, 0)  # Add instrument: Piano
@@ -282,8 +291,8 @@ def write_midi(note_list, fps):
     # Add notes
     for frame in range(len(note_list)):
         for note in note_list[frame]:
-            midi.addNote(0, 0, note[0] + info['lowest_key'], frames_to_beats(frame, fps, info['bpm']),
-                         frames_to_beats(note[1], fps, info['bpm']), 100)
+            midi.addNote(note[2], 0, note[0] + info['lowest_key'], frames_to_beats(frame, fps),
+                         frames_to_beats(note[1], fps), 100)
 
     # Save MIDI file
     with open(info['save_path'], 'wb') as file:
@@ -317,7 +326,7 @@ def process_video():
             elif keyboard_visible and not midi_started:
                 midi_started = True
 
-            pressed_keys.append(get_pressed_keys(frame, pixels, pixel_y))
+            pressed_keys.append(get_pressed_keys(frame, pixels, pixel_y, key_colors))
             saved_frames += 1
         elif not ret:
             break
