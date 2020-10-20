@@ -85,9 +85,9 @@ def get_info():
             break
     # search_height
     while 1:
-        search_height_input = input('What height should be scanned on? (0 - 1 in %; defaults to 0.84)\n')
+        search_height_input = input('What height should be scanned on? (0 - 1 in %; defaults to 0.9)\n')
         if search_height_input == '':
-            search_height = 0.84
+            search_height = 0.9
             break
         try:
             search_height = float(search_height_input)
@@ -187,7 +187,7 @@ def calculate_pixel_coords(video_width):
 
         if keys[current_key] == 'W':
             coord = round(white_key_width * (counted_white_keys + white_offset)
-                          + ((distortion * white_key_width/5) if not info['old_style'] else 0))
+                          + ((distortion * white_key_width/3) if not info['old_style'] else 0))
             coord = video_width if coord > video_width else coord
             coords.append(coord)
 
@@ -195,7 +195,7 @@ def calculate_pixel_coords(video_width):
             counted_white_keys += 1
         elif keys[current_key] == 'B':
             coord = round(white_key_width * (counted_white_keys + black_offset)
-                          + ((distortion * white_key_width/2.25) if not info['old_style'] else 0))
+                          + ((distortion * white_key_width/2) if not info['old_style'] else 0))
             coord = video_width if coord > video_width else coord
             coords.append(coord)
 
@@ -211,7 +211,8 @@ def colors_similar(color1, color2, threshold=15):
 
 
 def gray_color(mode, color, variation=50, threshold=105):
-    test1 = [i > 255 - threshold for i in color] if mode == 'white' else [i < threshold for i in color]
+    test1 = [True, True, True] if mode == 'gray' else\
+        ([i > 255 - threshold for i in color] if mode == 'white' else [i < threshold for i in color])
     test2 = max(color) - min(color) < variation
     return [test1, test2] == [[True, True, True], True]
 
@@ -221,7 +222,8 @@ def get_pressed_keys(image, pixels, pixel_y):
 
     for key, coord in enumerate(pixels):
         new_color = get_pixel(image, coord, pixel_y)
-        if gray_color('black', new_color) or gray_color('white', new_color):
+        if gray_color('black', new_color) or gray_color('white', new_color) or\
+                (not info['old_style'] and gray_color('gray', new_color)):
             continue
         else:
             if True not in [colors_similar(new_color, saved_color) for saved_color in saved_colors]:
@@ -295,7 +297,6 @@ def process_video():
     loops = 0
     saved_frames = 0
     pixels, key_colors = calculate_pixel_coords(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    print(pixels)
     pixel_y = round(video_height * info['search_height'])
     pressed_keys = []
     midi_started = False
