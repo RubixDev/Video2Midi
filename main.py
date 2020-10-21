@@ -9,7 +9,7 @@ def get_info():
     lowest_key = 0
     total_keys = 127
     bpm = 120
-    search_height = 0.82
+    max_tracks = 2
     black_mode = False
     old_style = True
 
@@ -83,18 +83,18 @@ def get_info():
             continue
         else:
             break
-    # search_height
+    # max_tracks
     while 1:
-        search_height_input = input('What height should be scanned on? (0 - 1 in %; defaults to 0.9)\n')
-        if search_height_input == '':
-            search_height = 0.9
+        max_tracks_input = input('How many different colors are used? (defaults to 2; max 16)\n')
+        if max_tracks_input == '':
+            max_tracks = 2
             break
         try:
-            search_height = float(search_height_input)
+            max_tracks = int(max_tracks_input)
         except ValueError:
             print('Incorrect Value!')
             continue
-        if not (0 <= search_height <= 1):
+        if not (1 <= max_tracks <= 16):
             print('The number is either too high or too low!')
             continue
         else:
@@ -114,11 +114,11 @@ def get_info():
     # old_style
     while 1:
         old_style_input = input('Is your video in the old SMB style? (Y/n)\n')
-        if old_style_input == '' or old_style_input.upper() == 'N':
-            old_style = False
-            break
-        elif old_style_input.upper() == 'Y':
+        if old_style_input == '' or old_style_input.upper() == 'Y':
             old_style = True
+            break
+        elif old_style_input.upper() == 'N':
+            old_style = False
             break
         else:
             print('Incorrect Input!')
@@ -129,7 +129,7 @@ def get_info():
             'lowest_key': lowest_key,
             'total_keys': total_keys,
             'bpm': bpm,
-            'search_height': search_height,
+            'max_tracks': max_tracks,
             'black_mode': black_mode,
             'old_style': old_style}
 
@@ -218,26 +218,24 @@ def gray_color(mode, color, variation=50, threshold=105):
     return [test1, test2] == [[True, True, True], True]
 
 
-def get_pressed_keys(image, pixels, pixel_y, key_colors):
-    output = []
+def nearest_color(color, color_list):
+    return min(color_list, key=lambda subject: sum((int(rgb1) - int(rgb2)) ** 2 for rgb1, rgb2 in zip(subject, color)))
+
+
+def get_pressed_keys(image, pixels, pixel_y):
+    pressed_keys = []
+    pixel_colors = []
 
     for key, coord in enumerate(pixels):
         new_color = get_pixel(image, coord, pixel_y)
+
         if gray_color('black', new_color) or gray_color('white', new_color) or gray_color('gray', new_color):
             continue
-        else:
-            if True not in [colors_similar(new_color, saved_color, (28 if key_colors[key] == 'B' else 20))
-                            for saved_color in saved_colors]:
-                saved_colors.append(new_color)
-                output.append([key, len(saved_colors) - 1])
-            else:
-                track = 0
-                for track, color in enumerate(saved_colors):
-                    if colors_similar(color, new_color, 45) or track == 15:
-                        break
-                output.append([key, track])
 
-    return output
+        pressed_keys.append(key)
+        pixel_colors.append(new_color)
+
+    return [pressed_keys, pixel_colors]
 
 
 def keys_visible(image, pixels, key_colors, video_height):
@@ -245,6 +243,7 @@ def keys_visible(image, pixels, key_colors, video_height):
     pixel_y = round(video_height * 0.95)
     results = []
     for pixel, pixel_x in enumerate(pixels):
+        pixel_x = 0 if pixel_x < 0 else pixel_x
         if key_colors[pixel] == 'B':
             continue
         pixel_color = get_pixel(image, pixel_x, pixel_y)
@@ -258,28 +257,67 @@ def keys_visible(image, pixels, key_colors, video_height):
     return results.count(True) > len(results) * 2/3
 
 
-def convert_note_list(note_list):
+def convert_note_list(note_list, tracks):
     output = []
     not_new = []
     note_list.append([])
-    for frame, pressed_keys_lists in enumerate(note_list):
+    for frame, pressed_keys in enumerate(note_list):
         output.append([])
-        pressed_keys = [i[0] for i in pressed_keys_lists]
 
-        for count, key in enumerate(not_new):
-            if key not in pressed_keys:
-                del not_new[count]
+        not_new = [i for i in not_new if i in pressed_keys]
 
-        for key in pressed_keys_lists:
-            if key[0] in not_new:
+        for count, key in enumerate(pressed_keys):
+            if key in not_new:
                 continue
-            else:
-                not_new.append(key[0])
-                duration = 1
-                while key[0] in note_list[frame + duration]:
-                    duration += 1
-                output[frame].append([key[0], duration, key[1]])
+
+            not_new.append(key)
+            duration = 1
+            while key in note_list[frame + duration]:
+                duration += 1
+            output[frame].append([key, duration, tracks[frame][count]])
+            
     return output[1:]
+
+
+def get_tracks(pixel_colors, key_colors):
+    tracks = []
+
+    for frame, frame_colors in enumerate(pixel_colors):
+        tracks.append([])
+        for key, color in enumerate(frame_colors):
+            if True not in [colors_similar(color, saved_color, (28 if key_colors[key] == 'B' else 20))
+                            for saved_color in saved_colors]:
+                saved_colors.append(color)
+                track = len(saved_colors) - 1
+            else:
+                track = 0
+                while track < 16 and not colors_similar(saved_colors[track], color, 45):
+                    track += 1
+            tracks[frame].append(track)
+
+    while len([i for i in saved_colors if i != []]) > info['max_tracks']:
+        counts = [[frame.count(track) for track in range(len(saved_colors))] for frame in tracks]
+        counts = [sum([frame[track] for frame in counts]) for track in range(len(saved_colors))]
+
+        index_to_del = counts.index(min([i for i in counts if i != 0]))
+        color_to_del = saved_colors[index_to_del]
+
+        saved_colors[index_to_del] = []
+
+        new_track = saved_colors.index(nearest_color(color_to_del, [i for i in saved_colors if i != []]))
+        tracks = [[new_track if i == index_to_del else i for i in frame] for frame in tracks]
+
+    while [] in saved_colors:
+        index_to_del = saved_colors.index([])
+        del saved_colors[index_to_del]
+
+        if len(saved_colors) == index_to_del:
+            break
+
+        for color in range(len(saved_colors) - index_to_del):
+            tracks = [[i - 1 if i == index_to_del + color + 1 else i for i in frame] for frame in tracks]
+
+    return tracks
 
 
 def write_midi(note_list, fps):
@@ -295,21 +333,27 @@ def write_midi(note_list, fps):
                          frames_to_beats(note[1], fps), 100)
 
     # Save MIDI file
-    with open(info['save_path'], 'wb') as file:
-        midi.writeFile(file)
+    try:
+        with open(info['save_path'], 'wb') as file:
+            midi.writeFile(file)
+    except PermissionError:
+        print('No permission to write file!')
 
 
 def process_video():
     video_path = info['video_path']
     video = cv2.VideoCapture(video_path)
     video_height = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
+    pixels, key_colors = calculate_pixel_coords(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    pixel_y = round(video_height * 0.9)
+
+    pressed_keys = []
+    pixel_colors = []
+
+    midi_started = False
     loops = 0
     saved_frames = 0
-    pixels, key_colors = calculate_pixel_coords(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    pixel_y = round(video_height * info['search_height'])
-    pressed_keys = []
-    midi_started = False
-
     while 1:
         ret, frame = video.read()
         if saved_frames % 500 == 0:
@@ -326,14 +370,17 @@ def process_video():
             elif keyboard_visible and not midi_started:
                 midi_started = True
 
-            pressed_keys.append(get_pressed_keys(frame, pixels, pixel_y, key_colors))
+            keys_return = get_pressed_keys(frame, pixels, pixel_y)
+            pressed_keys.append(keys_return[0])
+            pixel_colors.append(keys_return[1])
+
             saved_frames += 1
         elif not ret:
             break
         loops += 1
 
     print('Scanned through %d frames' % saved_frames)
-    write_midi(convert_note_list(pressed_keys), video.get(cv2.CAP_PROP_FPS))
+    write_midi(convert_note_list(pressed_keys, get_tracks(pixel_colors, key_colors)), video.get(cv2.CAP_PROP_FPS))
 
     video.release()
     cv2.destroyAllWindows()
