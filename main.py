@@ -1,29 +1,24 @@
 from midiutil import MIDIFile
 import cv2
 import os
+import pytube
 
 
 def get_info():
-    video_path = ''
-    save_path = ''
-    lowest_key = 0
-    total_keys = 127
-    bpm = 120
-    max_tracks = 2
-    black_mode = False
-    old_style = True
-
-    # video_path
+    # video_source
+    is_link = False
     while 1:
+        video_source = input('Where is your video located?\n')
+        if os.path.isfile(video_source):
+            break
         try:
-            video_path = input('Where is your video located?\n')
-            test_file = open(video_path, 'r')
-            test_file.close()
+            is_link = pytube.YouTube(video_source)
+            is_link = True
         except Exception as e:
-            print('Incorrect path given: ' + str(e))
-            continue
+            print('Incorrect source given: ' + str(e))
         break
     # save_path
+    save_path = ''
     while 1:
         try:
             save_path = input('Where should the MIDI file be saved?\n')
@@ -36,6 +31,7 @@ def get_info():
             continue
         break
     # lowest_key
+    lowest_key = 21
     while 1:
         lowest_key_input = input('What is the lowest note on the displayed keyboard? (0 - 127; defaults to 21 = A1)\n')
         if lowest_key_input == '':
@@ -52,6 +48,7 @@ def get_info():
         else:
             break
     # total_keys
+    total_keys = 88
     while 1:
         total_keys_input = input('How many Keys are on the displayed keyboard? (defaults to 88)\n')
         if total_keys_input == '':
@@ -68,6 +65,7 @@ def get_info():
         else:
             break
     # bpm
+    bpm = 120
     while 1:
         bpm_input = input('What bpm is the song played at? (defaults to 120)\n')
         if bpm_input == '':
@@ -84,6 +82,7 @@ def get_info():
         else:
             break
     # max_tracks
+    max_tracks = 2
     while 1:
         max_tracks_input = input('How many different colors are used? (defaults to 2; max 16)\n')
         if max_tracks_input == '':
@@ -100,6 +99,7 @@ def get_info():
         else:
             break
     # black_mode
+    black_mode = False
     while 1:
         black_mode_input = input('Is your video black MIDI? (y/N)\n')
         if black_mode_input == '' or black_mode_input.upper() == 'N':
@@ -112,6 +112,7 @@ def get_info():
             print('Incorrect Input!')
             continue
     # old_style
+    old_style = True
     while 1:
         old_style_input = input('Is your video in the old SMB style? (Y/n)\n')
         if old_style_input == '' or old_style_input.upper() == 'Y':
@@ -124,14 +125,21 @@ def get_info():
             print('Incorrect Input!')
             continue
 
-    return {'video_path': video_path,
+    return {'video_source': video_source,
             'save_path': save_path,
             'lowest_key': lowest_key,
             'total_keys': total_keys,
             'bpm': bpm,
             'max_tracks': max_tracks,
             'black_mode': black_mode,
-            'old_style': old_style}
+            'old_style': old_style,
+            'is_link': is_link}
+
+
+def download_video():
+    print('Downloading Video')
+    return pytube.YouTube(info['video_source']).streams\
+        .filter(type='video').order_by('resolution')[-1].download(filename='video', skip_existing=False)
 
 
 def frames_to_beats(frames, fps):
@@ -275,7 +283,7 @@ def convert_note_list(note_list, tracks):
             while key in note_list[frame + duration]:
                 duration += 1
             output[frame].append([key, duration, tracks[frame][count]])
-            
+
     return output[1:]
 
 
@@ -321,7 +329,7 @@ def get_tracks(pixel_colors, key_colors):
 
 
 def write_midi(note_list, fps):
-    midi = MIDIFile(len(saved_colors))  # Create midi object
+    midi = MIDIFile(len(saved_colors) if len(saved_colors) > 0 else 1)  # Create midi object
 
     midi.addTempo(0, 0, info['bpm'])  # Add Tempo
     midi.addProgramChange(0, 0, 0, 0)  # Add instrument: Piano
@@ -341,8 +349,8 @@ def write_midi(note_list, fps):
 
 
 def process_video():
-    video_path = info['video_path']
-    video = cv2.VideoCapture(video_path)
+    video_source = info['video_source']
+    video = cv2.VideoCapture(video_source)
     video_height = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
     pixels, key_colors = calculate_pixel_coords(video.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -386,17 +394,22 @@ def process_video():
     cv2.destroyAllWindows()
 
 
-def main(video_path: str,
+def main(video_source: str,
          save_path: str,
          lowest_key: int,
          total_keys: int,
          bpm: int,
          max_tracks: int,
          black_mode: bool,
-         old_style: bool):
+         old_style: bool,
+         is_link: bool):
     global info
+
     search_height = 0.85 if old_style else 0.9
-    info = {'video_path': video_path,
+    if is_link:
+        video_source = download_video()
+
+    info = {'video_source': video_source,
             'save_path': save_path,
             'lowest_key': lowest_key,
             'total_keys': total_keys,
@@ -407,15 +420,20 @@ def main(video_path: str,
             'search_height': search_height}
     process_video()
 
+    if is_link:
+        os.remove(video_source)
+
 
 if __name__ == '__main__':
     saved_colors = []
     info = get_info()
-    main(info['video_path'],
+
+    main(info['video_source'],
          info['save_path'],
          info['lowest_key'],
          info['total_keys'],
          info['bpm'],
          info['max_tracks'],
          info['black_mode'],
-         info['old_style'])
+         info['old_style'],
+         info['is_link'])
