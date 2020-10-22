@@ -12,7 +12,6 @@ def get_info():
     max_tracks = 2
     black_mode = False
     old_style = True
-    search_height = 0.85
 
     # video_path
     while 1:
@@ -120,7 +119,6 @@ def get_info():
             break
         elif old_style_input.upper() == 'N':
             old_style = False
-            search_height = 0.9
             break
         else:
             print('Incorrect Input!')
@@ -133,8 +131,7 @@ def get_info():
             'bpm': bpm,
             'max_tracks': max_tracks,
             'black_mode': black_mode,
-            'old_style': old_style,
-            'search_height': search_height}
+            'old_style': old_style}
 
 
 def frames_to_beats(frames, fps):
@@ -191,7 +188,7 @@ def calculate_pixel_coords(video_width):
         if keys[current_key] == 'W':
             coord = round(white_key_width * (counted_white_keys + white_offset)
                           + ((distortion * white_key_width/3) if not info['old_style'] else 0))
-            coord = video_width if coord > video_width else coord
+            coord = video_width - 1 if coord >= video_width else coord
             coords.append(coord)
 
             key_colors.append('W')
@@ -199,7 +196,7 @@ def calculate_pixel_coords(video_width):
         elif keys[current_key] == 'B':
             coord = round(white_key_width * (counted_white_keys + black_offset)
                           + ((distortion * white_key_width/2) if not info['old_style'] else 0))
-            coord = video_width if coord > video_width else coord
+            coord = video_width - 1 if coord >= video_width else coord
             coords.append(coord)
 
             key_colors.append('B')
@@ -389,7 +386,36 @@ def process_video():
     cv2.destroyAllWindows()
 
 
+def main(video_path: str,
+         save_path: str,
+         lowest_key: int,
+         total_keys: int,
+         bpm: int,
+         max_tracks: int,
+         black_mode: bool,
+         old_style: bool):
+    global info
+    search_height = 0.85 if old_style else 0.9
+    info = {'video_path': video_path,
+            'save_path': save_path,
+            'lowest_key': lowest_key,
+            'total_keys': total_keys,
+            'bpm': bpm,
+            'max_tracks': max_tracks,
+            'black_mode': black_mode,
+            'old_style': old_style,
+            'search_height': search_height}
+    process_video()
+
+
 if __name__ == '__main__':
     saved_colors = []
     info = get_info()
-    process_video()
+    main(info['video_path'],
+         info['save_path'],
+         info['lowest_key'],
+         info['total_keys'],
+         info['bpm'],
+         info['max_tracks'],
+         info['black_mode'],
+         info['old_style'])
