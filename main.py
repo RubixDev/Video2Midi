@@ -12,6 +12,7 @@ def get_info():
     max_tracks = 2
     black_mode = False
     old_style = True
+    search_height = 0.85
 
     # video_path
     while 1:
@@ -119,6 +120,7 @@ def get_info():
             break
         elif old_style_input.upper() == 'N':
             old_style = False
+            search_height = 0.9
             break
         else:
             print('Incorrect Input!')
@@ -131,7 +133,8 @@ def get_info():
             'bpm': bpm,
             'max_tracks': max_tracks,
             'black_mode': black_mode,
-            'old_style': old_style}
+            'old_style': old_style,
+            'search_height': search_height}
 
 
 def frames_to_beats(frames, fps):
@@ -346,7 +349,7 @@ def process_video():
     video_height = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
     pixels, key_colors = calculate_pixel_coords(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    pixel_y = round(video_height * 0.9)
+    pixel_y = round(video_height * info['search_height'])
 
     pressed_keys = []
     pixel_colors = []
